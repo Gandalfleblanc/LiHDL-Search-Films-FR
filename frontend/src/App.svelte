@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte'
   import { Generate, ExportCSV, SaveSettings, LoadSettings, GetPlatforms } from '../wailsjs/go/main/App.js'
-  import { EventsOn } from '../wailsjs/runtime/runtime.js'
+  import { EventsOn, BrowserOpenURL } from '../wailsjs/runtime/runtime.js'
   import logo from './assets/images/lihdl-logo.png'
   import banner from './assets/images/banner.png'
 
@@ -36,6 +36,10 @@
 
     EventsOn('progress', (msg) => (progressMsg = msg))
   })
+
+  function openTmdb(id) {
+    BrowserOpenURL(`https://www.themoviedb.org/movie/${id}`)
+  }
 
   function selectedPlatforms() {
     return allPlatforms.filter((p) => platforms[p])
@@ -188,7 +192,7 @@
           <tbody>
             {#each shown as f (f.tmdb_id)}
               <tr>
-                <td class="num">{f.tmdb_id}</td>
+                <td class="num"><button class="tmdb-link" on:click={() => openTmdb(f.tmdb_id)} title="Ouvrir la fiche TMDB">{f.tmdb_id}</button></td>
                 <td>{f.title}</td>
                 <td class="year">{f.year}</td>
                 <td class="plats">{f.platforms.join(', ')}</td>
@@ -299,6 +303,12 @@
   tbody td { padding: 8px 12px; border-bottom: 1px solid #1c2836; }
   tbody tr:hover { background: #1b2735; }
   .num { color: #7fa8dd; font-variant-numeric: tabular-nums; width: 80px; }
+  .tmdb-link {
+    background: none; border: none; padding: 0; cursor: pointer;
+    color: #7fa8dd; font: inherit; font-variant-numeric: tabular-nums;
+    text-decoration: underline; text-decoration-color: rgba(127, 168, 221, 0.4);
+  }
+  .tmdb-link:hover { color: #aacdf5; text-decoration-color: #aacdf5; }
   .year { width: 64px; color: #b9c6d8; }
   .plats { color: #9fd0b4; }
   .res { width: 72px; }

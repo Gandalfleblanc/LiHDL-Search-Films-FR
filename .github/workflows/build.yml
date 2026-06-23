@@ -74,6 +74,8 @@ jobs:
           node-version: '22'
       - name: Install Wails
         run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
+      - name: Install NSIS
+        run: choco install nsis -y
       - name: Build (NSIS installer + portable exe)
         run: wails build -platform windows/amd64 -nsis -ldflags "-s -w"
       - name: List output

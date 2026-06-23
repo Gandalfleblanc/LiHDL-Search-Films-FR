@@ -285,9 +285,10 @@ func (a *App) ExportCSV(films []Film) (string, error) {
 
 	w := csv.NewWriter(f)
 	w.Comma = ';'
-	w.Write([]string{"tmdb_id", "titre", "annee", "plateformes", "resolution_max", "vf"})
+	w.Write([]string{"tmdb_id", "lien_tmdb", "titre", "annee", "plateformes", "resolution_max", "vf"})
 	for _, fl := range films {
-		w.Write([]string{strconv.Itoa(fl.TMDBID), fl.Title, fl.Year, strings.Join(fl.Platforms, ", "), fl.Resolution, fl.VF})
+		url := fmt.Sprintf("https://www.themoviedb.org/movie/%d", fl.TMDBID)
+		w.Write([]string{strconv.Itoa(fl.TMDBID), url, fl.Title, fl.Year, strings.Join(fl.Platforms, ", "), fl.Resolution, fl.VF})
 	}
 	w.Flush()
 	if err := w.Error(); err != nil {
