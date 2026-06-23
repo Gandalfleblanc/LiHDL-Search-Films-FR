@@ -192,6 +192,7 @@ func (a *App) Generate(token string, useBearer bool, platforms []string, monetiz
 				"language":                      {"fr-FR"},
 				"sort_by":                       {"primary_release_date.desc"},
 				"include_adult":                 {"false"},
+				"without_genres":                {"99"}, // exclut les documentaires
 				"page":                          {strconv.Itoa(page)},
 			}
 			switch criteria {
