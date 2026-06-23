@@ -1,0 +1,144 @@
+name: Build
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+
+  build-macos:
+    name: Build macOS (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-14
+          - arch: amd64
+            runner: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Wails
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
+      - name: Build
+        run: wails build -platform darwin/${{ matrix.arch }} -ldflags "-s -w"
+      - name: Ad-hoc codesign
+        run: codesign --force --deep --sign - "build/bin/LiHDL Search Films FR.app"
+      - name: Zip .app (preserve exec bits)
+        run: cd build/bin && zip -r "LiHDL-Search-Films-FR-macos-${{ matrix.arch }}.zip" "LiHDL Search Films FR.app"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LiHDL-Search-Films-FR-macos-${{ matrix.arch }}
+          path: build/bin/LiHDL-Search-Films-FR-macos-${{ matrix.arch }}.zip
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+      - name: Install Wails
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
+      - name: Build
+        run: wails build -platform linux/amd64 -tags webkit2_41 -ldflags "-s -w"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LiHDL-Search-Films-FR-linux-amd64
+          path: build/bin/LiHDL Search Films FR
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Wails
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
+      - name: Build (NSIS installer + portable exe)
+        run: wails build -platform windows/amd64 -nsis -ldflags "-s -w"
+      - name: List output
+        shell: bash
+        run: ls -la build/bin/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LiHDL-Search-Films-FR-windows-amd64
+          path: |
+            build/bin/LiHDL Search Films FR.exe
+            build/bin/LiHDL Search Films FR-amd64-installer.exe
+
+  release:
+    needs: [build-macos, build-linux, build-windows]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+      - name: Package Linux binary
+        run: cd LiHDL-Search-Films-FR-linux-amd64 && tar -czf "../LiHDL-Search-Films-FR-linux-amd64.tar.gz" "LiHDL Search Films FR" && cd ..
+      - name: Package Windows portable exe
+        run: cd LiHDL-Search-Films-FR-windows-amd64 && zip "../LiHDL-Search-Films-FR-windows-amd64.zip" "LiHDL Search Films FR.exe" && cd ..
+      - name: Rename Windows installer
+        run: |
+          if [ -f "LiHDL-Search-Films-FR-windows-amd64/LiHDL Search Films FR-amd64-installer.exe" ]; then
+            cp "LiHDL-Search-Films-FR-windows-amd64/LiHDL Search Films FR-amd64-installer.exe" LiHDL-Search-Films-FR-windows-amd64-installer.exe
+          fi
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            LiHDL-Search-Films-FR-macos-arm64/LiHDL-Search-Films-FR-macos-arm64.zip
+            LiHDL-Search-Films-FR-macos-amd64/LiHDL-Search-Films-FR-macos-amd64.zip
+            LiHDL-Search-Films-FR-linux-amd64.tar.gz
+            LiHDL-Search-Films-FR-windows-amd64.zip
+            LiHDL-Search-Films-FR-windows-amd64-installer.exe
+          body: |
+            ## LiHDL Search Films FR
+
+            Liste les films FR disponibles sur Netflix / Prime Video / Orange / Canal+ (données TMDB + JustWatch), avec résolution (HD/4K) et VF, et exporte un CSV (n° TMDB, titre, année, plateformes, résolution, VF).
+
+            ### macOS
+            Télécharger le `.zip` correspondant à ton Mac :
+            - **Apple Silicon** (M1, M2, M3, M4) → `macos-arm64.zip`
+            - **Intel** → `macos-amd64.zip`
+
+            Dézipper, puis **à la première utilisation** ouvrir un Terminal et exécuter :
+            ```bash
+            xattr -cr "/chemin/vers/LiHDL Search Films FR.app"
+            ```
+            (ou glisser le `.app` dans la commande après `xattr -cr ` pour auto-remplir le chemin)
+
+            Cette commande retire l'attribut "quarantaine" macOS sur l'app non signée Apple Developer. À faire une seule fois après chaque téléchargement.
+
+            ### Windows
+            - **Option recommandée** : télécharger `LiHDL-Search-Films-FR-windows-amd64-installer.exe`, double-cliquer, suivre l'assistant.
+            - **Option portable** : télécharger `LiHDL-Search-Films-FR-windows-amd64.zip`, dézipper, lancer `LiHDL Search Films FR.exe`.
+
+            ⚠ **Faux positif antivirus** : l'app n'est pas signée avec un certificat EV. Windows Defender / certains AV peuvent afficher une alerte (SmartScreen → Informations complémentaires → Exécuter quand même).
+
+            ### Linux
+            ```bash
+            tar -xzf LiHDL-Search-Films-FR-linux-amd64.tar.gz
+            chmod +x "LiHDL Search Films FR"
+            ./"LiHDL Search Films FR"
+            ```
+            Nécessite `libwebkit2gtk-4.1` (Ubuntu 24.04+, Debian 13+, Fedora 39+).
