@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte'
-  import { Generate, ExportCSV, SaveSettings, LoadSettings, GetPlatforms } from '../wailsjs/go/main/App.js'
+  import { Generate, ExportCSV, SaveSettings, LoadSettings, GetPlatforms, LoadExclusionCSV, ClearExclusion } from '../wailsjs/go/main/App.js'
   import { EventsOn, BrowserOpenURL } from '../wailsjs/runtime/runtime.js'
   import logo from './assets/images/lihdl-logo.png'
   import banner from './assets/images/banner.png'
@@ -20,6 +20,8 @@
   let count = 0
   let exportInfo = ''
   let filter = ''
+  let exclCount = 0
+  let exclFile = ''
 
   onMount(async () => {
     allPlatforms = await GetPlatforms()
@@ -39,6 +41,22 @@
 
   function openTmdb(id) {
     BrowserOpenURL(`https://www.themoviedb.org/movie/${id}`)
+  }
+
+  async function loadExclusion() {
+    const r = await LoadExclusionCSV()
+    if (r.error) {
+      errorMsg = 'Exclusion : ' + r.error
+      return
+    }
+    exclCount = r.count
+    if (r.file) exclFile = r.file
+  }
+
+  async function clearExclusion() {
+    await ClearExclusion()
+    exclCount = 0
+    exclFile = ''
   }
 
   function selectedPlatforms() {
@@ -161,6 +179,17 @@
           <label class="chip" class:on={enrich}><input type="checkbox" bind:checked={enrich} />Résolution + VF (plus lent)</label>
         </div>
       </div>
+
+      <div class="group">
+        <span class="legend">Exclure des films (CSV de n° TMDB)</span>
+        <div class="chips">
+          <button class="chip btn-chip" on:click={loadExclusion}>📄 Charger un CSV</button>
+          {#if exclCount}
+            <span class="chip on excl-info">{exclCount} exclus{exclFile ? ` · ${exclFile}` : ''}</span>
+            <button class="chip btn-chip" on:click={clearExclusion} title="Retirer la liste d'exclusion">✕</button>
+          {/if}
+        </div>
+      </div>
     </div>
 
     <div class="actions">
@@ -274,6 +303,9 @@
   }
   .chip.on { background: #1d3a5f; border-color: #4b86d6; color: #cfe0f7; }
   .chip input { accent-color: #4b86d6; }
+  .btn-chip { font: inherit; color: #e8edf4; }
+  .btn-chip:hover { background: #1f2c3d; border-color: #4b86d6; }
+  .excl-info { cursor: default; }
 
   .actions { display: flex; align-items: center; gap: 12px; margin-top: 20px; }
   .btn {

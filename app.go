@@ -33,7 +33,8 @@ var PlatformList = []string{"Netflix", "Prime Video", "Orange", "Canal+"}
 
 // App struct
 type App struct {
-	ctx context.Context
+	ctx      context.Context
+	excluded map[int]bool // n° TMDB à exclure (chargés depuis un CSV)
 }
 
 func NewApp() *App {
@@ -214,6 +215,9 @@ func (a *App) Generate(token string, useBearer bool, platforms []string, monetiz
 				total = 500
 			}
 			for _, m := range dr.Results {
+				if a.excluded[m.ID] {
+					continue // film présent dans la liste d'exclusion
+				}
 				f := films[m.ID]
 				if f == nil {
 					year := ""
@@ -344,6 +348,86 @@ func (a *App) LoadSettings() Settings {
 // GetPlatforms renvoie la liste des plateformes proposées dans l'UI.
 func (a *App) GetPlatforms() []string {
 	return PlatformList
+}
+
+// ---------- Liste d'exclusion (CSV de n° TMDB) ----------
+
+type ExclusionResult struct {
+	Count int    `json:"count"`
+	File  string `json:"file"`
+	Error string `json:"error"`
+}
+
+// LoadExclusionCSV ouvre un CSV et mémorise les n° TMDB à exclure des résultats.
+func (a *App) LoadExclusionCSV() ExclusionResult {
+	path, err := wruntime.OpenFileDialog(a.ctx, wruntime.OpenDialogOptions{
+		Title:   "CSV des n° TMDB à exclure",
+		Filters: []wruntime.FileFilter{{DisplayName: "CSV", Pattern: "*.csv;*.txt"}},
+	})
+	if err != nil {
+		return ExclusionResult{Error: err.Error()}
+	}
+	if path == "" {
+		return ExclusionResult{Count: len(a.excluded)} // annulé : on garde l'existant
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ExclusionResult{Error: err.Error()}
+	}
+	a.excluded = parseExclusionIDs(data)
+	return ExclusionResult{Count: len(a.excluded), File: filepath.Base(path)}
+}
+
+// ClearExclusion vide la liste d'exclusion.
+func (a *App) ClearExclusion() {
+	a.excluded = nil
+}
+
+// parseExclusionIDs extrait les n° TMDB d'un CSV (séparateur ; ou ,). Repère la
+// colonne « tmdb_id » via l'en-tête, sinon prend la 1re colonne. Ignore l'en-tête.
+func parseExclusionIDs(data []byte) map[int]bool {
+	ids := map[int]bool{}
+	text := strings.TrimPrefix(string(data), "\ufeff") // retire le BOM éventuel
+	lines := strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
+
+	sep := ","
+	if len(lines) > 0 && strings.Count(lines[0], ";") >= strings.Count(lines[0], ",") {
+		sep = ";"
+	}
+
+	col := 0
+	for i, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		fields := strings.Split(line, sep)
+		// En-tête : repère la colonne tmdb_id, puis passe à la suite.
+		// Priorité au nom exact "tmdb_id" (sinon "lien_tmdb" matcherait aussi).
+		if i == 0 {
+			best := -1
+			for j, f := range fields {
+				fl := strings.ToLower(strings.TrimSpace(f))
+				if fl == "tmdb_id" || fl == "tmdb" || fl == "id_tmdb" {
+					best = j
+					break
+				}
+				if best == -1 && strings.Contains(fl, "tmdb") {
+					best = j
+				}
+			}
+			if best >= 0 {
+				col = best
+				continue
+			}
+		}
+		if col >= len(fields) {
+			continue
+		}
+		if id, err := strconv.Atoi(strings.TrimSpace(fields[col])); err == nil && id > 0 {
+			ids[id] = true
+		}
+	}
+	return ids
 }
 
 // ---------- helpers ----------
