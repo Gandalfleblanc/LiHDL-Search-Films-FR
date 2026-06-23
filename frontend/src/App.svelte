@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte'
-  import { Generate, ExportCSV, SaveSettings, LoadSettings, GetPlatforms, LoadExclusionCSV, ClearExclusion } from '../wailsjs/go/main/App.js'
+  import { Generate, ExportCSV, SaveSettings, LoadSettings, GetPlatforms, LoadExclusionCSV, ClearExclusion, GetVersion, CheckUpdate, DoUpdate } from '../wailsjs/go/main/App.js'
   import { EventsOn, BrowserOpenURL } from '../wailsjs/runtime/runtime.js'
   import logo from './assets/images/lihdl-logo.png'
   import banner from './assets/images/banner.png'
@@ -22,6 +22,9 @@
   let filter = ''
   let exclCount = 0
   let exclFile = ''
+  let version = ''
+  let update = { available: false, latest: '', url: '', notes: '' }
+  let updating = false
 
   onMount(async () => {
     allPlatforms = await GetPlatforms()
@@ -37,7 +40,23 @@
     enrich = s.enrich !== false
 
     EventsOn('progress', (msg) => (progressMsg = msg))
+
+    version = await GetVersion()
+    CheckUpdate().then((u) => {
+      if (u && !u.error) update = u
+    })
   })
+
+  async function installUpdate() {
+    updating = true
+    progressMsg = 'Mise à jour en cours…'
+    const r = await DoUpdate()
+    if (r && r.error) {
+      errorMsg = r.error
+      updating = false
+    }
+    // Sur macOS, l'app se ferme et redémarre toute seule.
+  }
 
   function openTmdb(id) {
     BrowserOpenURL(`https://www.themoviedb.org/movie/${id}`)
@@ -123,10 +142,22 @@
   <header>
     <div class="logo" style="background-image: url({logo})"></div>
     <div class="titles">
-      <h1>LiHDL Search Films FR</h1>
+      <h1>LiHDL Search Films FR <span class="ver">v{version}</span></h1>
       <p class="sub">Films français disponibles sur les plateformes de streaming (données TMDB / JustWatch)</p>
     </div>
   </header>
+
+  {#if update.available}
+    <div class="update-banner">
+      <span>🎉 Mise à jour <strong>v{update.latest}</strong> disponible (tu as v{version}).</span>
+      <div class="update-actions">
+        {#if update.url}<button class="btn-link" on:click={() => BrowserOpenURL(update.url)}>Notes de version</button>{/if}
+        <button class="btn primary" on:click={installUpdate} disabled={updating}>
+          {updating ? '⏳ Installation…' : '⬇️ Installer et redémarrer'}
+        </button>
+      </div>
+    </div>
+  {/if}
 
   <section class="card">
     <div class="row">
@@ -264,6 +295,15 @@
   .logo { width: 56px; height: 56px; border-radius: 12px; background-size: cover; background-position: center; background-repeat: no-repeat; flex-shrink: 0; box-shadow: 0 2px 10px rgba(0,0,0,.4); }
   .titles { display: flex; flex-direction: column; }
   header h1 { margin: 0 0 2px; font-size: 1.5rem; }
+  .ver { font-size: 0.7rem; color: #8da2bd; font-weight: 400; vertical-align: middle; background: #1b2735; padding: 2px 7px; border-radius: 6px; }
+  .update-banner {
+    display: flex; align-items: center; justify-content: space-between; gap: 14px;
+    background: linear-gradient(90deg, #1d3a5f, #2f6fd1); border: 1px solid #4b86d6;
+    border-radius: 10px; padding: 12px 16px; margin-bottom: 16px; font-size: 0.9rem;
+  }
+  .update-actions { display: flex; align-items: center; gap: 10px; }
+  .btn-link { background: none; border: none; color: #cfe0f7; text-decoration: underline; cursor: pointer; font: inherit; }
+  .btn-link:hover { color: #fff; }
   .sub { margin: 0; color: #8da2bd; font-size: 0.85rem; }
 
   .card {
