@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -12,7 +13,16 @@ import (
 
 const jwEndpoint = "https://apis.justwatch.com/graphql"
 
-const jwQuery = `query($filter: TitleFilter!, $country: Country!, $language: Language!, $first: Int!) { popularTitles(country: $country, filter: $filter, first: $first) { edges { node { objectType content(country: $country, language: $language) { title originalReleaseYear } offers(country: $country, platform: WEB) { presentationType audioLanguages } } } } }`
+const jwQuery = `query($filter: TitleFilter!, $country: Country!, $language: Language!, $first: Int!) { popularTitles(country: $country, filter: $filter, first: $first) { edges { node { objectType content(country: $country, language: $language) { title originalReleaseYear } offers(country: $country, platform: WEB) { monetizationType presentationType audioLanguages package { clearName } } } } } }`
+
+// Libellé plateforme (app) -> sous-chaînes du nom de package JustWatch.
+// NB : JustWatch FR ne référence PAS Orange -> résolution/VF « inconnu » pour Orange.
+var jwPackageMatch = map[string][]string{
+	"Netflix":     {"netflix"},
+	"Prime Video": {"amazon prime video"},
+	"Orange":      {"orange"},
+	"Canal+":      {"canal"},
+}
 
 var jwClient = &http.Client{Timeout: 20 * time.Second}
 
@@ -32,8 +42,12 @@ type jwResp struct {
 						OriginalReleaseYear int    `json:"originalReleaseYear"`
 					} `json:"content"`
 					Offers []struct {
+						MonetizationType string   `json:"monetizationType"`
 						PresentationType string   `json:"presentationType"`
 						AudioLanguages   []string `json:"audioLanguages"`
+						Package          struct {
+							ClearName string `json:"clearName"`
+						} `json:"package"`
 					} `json:"offers"`
 				} `json:"node"`
 			} `json:"edges"`
@@ -41,11 +55,25 @@ type jwResp struct {
 	} `json:"data"`
 }
 
-// justwatchEnrich cherche un film par titre+année (région FR) et renvoie :
-//   - resolution : "4K" / "HD" / "SD" / "" (introuvable)
+// justwatchEnrich cherche un film par titre+année (région FR) et renvoie la
+// résolution + VF calculées UNIQUEMENT sur les offres des plateformes et types
+// de monétisation sélectionnés (sinon on mélangerait les résolutions d'autres
+// plateformes — cf. bug « HD affiché alors que SD sur Orange »).
+//   - resolution : "4K" / "HD" / "SD" / "" (introuvable / plateforme non couverte)
 //   - vf         : "oui" / "non" / "inconnu"
-func justwatchEnrich(title string, year int) (resolution, vf string) {
+func justwatchEnrich(title string, year int, platforms, monetize []string) (resolution, vf string) {
 	resolution, vf = "", "inconnu"
+
+	// Sous-chaînes de packages JustWatch à retenir selon les plateformes choisies.
+	var pkgSubs []string
+	for _, label := range platforms {
+		pkgSubs = append(pkgSubs, jwPackageMatch[label]...)
+	}
+	// Types de monétisation retenus (JustWatch : FLATRATE / RENT / BUY).
+	monSet := map[string]bool{}
+	for _, m := range monetize {
+		monSet[strings.ToUpper(m)] = true
+	}
 
 	body, err := json.Marshal(jwReq{
 		Variables: map[string]any{
@@ -71,7 +99,7 @@ func justwatchEnrich(title string, year int) (resolution, vf string) {
 	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusTooManyRequests {
 		time.Sleep(2 * time.Second)
-		return justwatchEnrich(title, year)
+		return justwatchEnrich(title, year, platforms, monetize)
 	}
 	if resp.StatusCode != http.StatusOK {
 		return
@@ -103,6 +131,24 @@ func justwatchEnrich(title string, year int) (resolution, vf string) {
 
 	rank, anyAudio, hasFr := 0, false, false
 	for _, o := range offers {
+		// Ne garder que les offres des plateformes sélectionnées…
+		if len(pkgSubs) > 0 {
+			name := strings.ToLower(o.Package.ClearName)
+			matched := false
+			for _, s := range pkgSubs {
+				if strings.Contains(name, s) {
+					matched = true
+					break
+				}
+			}
+			if !matched {
+				continue
+			}
+		}
+		// …et des types de monétisation sélectionnés.
+		if len(monSet) > 0 && !monSet[o.MonetizationType] {
+			continue
+		}
 		switch o.PresentationType {
 		case "_4K":
 			if rank < 3 {

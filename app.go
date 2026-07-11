@@ -255,7 +255,7 @@ func (a *App) Generate(token string, useBearer bool, platforms []string, monetiz
 			if len(list[i].Year) >= 4 {
 				yr, _ = strconv.Atoi(list[i].Year[:4])
 			}
-			res, vf := justwatchEnrich(list[i].Title, yr)
+			res, vf := justwatchEnrich(list[i].Title, yr, platforms, monetize)
 			list[i].Resolution = res
 			list[i].VF = vf
 			a.progress(fmt.Sprintf("Enrichissement JustWatch %d/%d — %s", i+1, n, list[i].Title))

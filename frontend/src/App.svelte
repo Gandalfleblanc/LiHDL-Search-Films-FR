@@ -20,6 +20,7 @@
   let count = 0
   let exportInfo = ''
   let filter = ''
+  let sortBy = 'titre' // 'titre' | 'resolution' | 'annee'
   let exclCount = 0
   let exclFile = ''
   let version = ''
@@ -127,13 +128,25 @@
     }
   }
 
-  $: shown = filter
-    ? films.filter(
-        (f) =>
-          f.title.toLowerCase().includes(filter.toLowerCase()) ||
-          ('' + f.tmdb_id).includes(filter)
-      )
-    : films
+  const resRank = { '4K': 3, HD: 2, SD: 1 }
+
+  $: shown = (() => {
+    let list = filter
+      ? films.filter(
+          (f) =>
+            f.title.toLowerCase().includes(filter.toLowerCase()) ||
+            ('' + f.tmdb_id).includes(filter)
+        )
+      : films.slice()
+    if (sortBy === 'resolution') {
+      list = list.slice().sort((a, b) => (resRank[b.resolution] || 0) - (resRank[a.resolution] || 0))
+    } else if (sortBy === 'annee') {
+      list = list.slice().sort((a, b) => (b.year || '').localeCompare(a.year || ''))
+    } else {
+      list = list.slice().sort((a, b) => a.title.toLowerCase().localeCompare(b.title.toLowerCase()))
+    }
+    return list
+  })()
 </script>
 
 <div class="bg" style="background-image: url({banner})"></div>
@@ -242,6 +255,13 @@
     <section class="card results">
       <div class="results-head">
         <input class="search" placeholder="Filtrer (titre ou n° TMDB)…" bind:value={filter} />
+        <label class="sort">Trier&nbsp;:
+          <select bind:value={sortBy}>
+            <option value="titre">Titre</option>
+            <option value="resolution">Résolution (4K→SD)</option>
+            <option value="annee">Année (récent)</option>
+          </select>
+        </label>
         <span class="muted">{shown.length} affichés</span>
       </div>
       <div class="table-wrap">
@@ -365,6 +385,8 @@
 
   .results-head { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
   .search { flex: 1; }
+  .sort { display: flex; align-items: center; gap: 6px; color: #8da2bd; font-size: 0.82rem; white-space: nowrap; }
+  .sort select { background: #0f1722; border: 1px solid #2c3c52; color: #e8edf4; border-radius: 8px; padding: 7px 9px; font-size: 0.85rem; }
   .muted { color: #8da2bd; font-size: 0.82rem; }
   .table-wrap { max-height: 50vh; overflow: auto; border-radius: 8px; border: 1px solid #243244; }
   table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
