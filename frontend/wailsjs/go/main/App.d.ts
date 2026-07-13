@@ -10,7 +10,7 @@ export function DoUpdate():Promise<main.UpdateInfo>;
 
 export function ExportCSV(arg1:Array<main.Film>):Promise<string>;
 
-export function Generate(arg1:string,arg2:boolean,arg3:Array<string>,arg4:Array<string>,arg5:string,arg6:boolean):Promise<main.GenerateResult>;
+export function Generate(arg1:string,arg2:boolean,arg3:Array<string>,arg4:Array<string>,arg5:string,arg6:boolean,arg7:Array<string>):Promise<main.GenerateResult>;
 
 export function GetPlatforms():Promise<Array<string>>;
 

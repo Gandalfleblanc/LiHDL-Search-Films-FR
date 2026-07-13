@@ -12,6 +12,7 @@
   let monetize = { flatrate: true, rent: true, buy: true }
   let criteria = 'origin' // 'origin' | 'language' | 'all'
   let enrich = true // enrichissement JustWatch (résolution + VF)
+  let exclude = { documentaire: true, telefilm: true, court: true, spectacle: true }
 
   let loading = false
   let progressMsg = ''
@@ -39,6 +40,13 @@
     monetize = { flatrate: mon.has('flatrate'), rent: mon.has('rent'), buy: mon.has('buy') }
     criteria = s.criteria || 'origin'
     enrich = s.enrich !== false
+    const ex = new Set(s.exclude || ['documentaire', 'telefilm', 'court', 'spectacle'])
+    exclude = {
+      documentaire: ex.has('documentaire'),
+      telefilm: ex.has('telefilm'),
+      court: ex.has('court'),
+      spectacle: ex.has('spectacle'),
+    }
 
     EventsOn('progress', (msg) => (progressMsg = msg))
 
@@ -85,6 +93,9 @@
   function selectedMonetize() {
     return ['flatrate', 'rent', 'buy'].filter((m) => monetize[m])
   }
+  function selectedExclude() {
+    return ['documentaire', 'telefilm', 'court', 'spectacle'].filter((e) => exclude[e])
+  }
 
   async function run() {
     errorMsg = ''
@@ -101,10 +112,11 @@
       monetize: selectedMonetize(),
       criteria,
       enrich,
+      exclude: selectedExclude(),
     })
 
     try {
-      const res = await Generate(token, useBearer, selectedPlatforms(), selectedMonetize(), criteria, enrich)
+      const res = await Generate(token, useBearer, selectedPlatforms(), selectedMonetize(), criteria, enrich, selectedExclude())
       if (res.error) {
         errorMsg = res.error
       } else {
@@ -214,6 +226,16 @@
           <label class="chip" class:on={criteria === 'origin'}><input type="radio" bind:group={criteria} value="origin" />Pays d'origine FR</label>
           <label class="chip" class:on={criteria === 'language'}><input type="radio" bind:group={criteria} value="language" />Langue VO française</label>
           <label class="chip" class:on={criteria === 'all'}><input type="radio" bind:group={criteria} value="all" />Toutes nationalités (audio FR probable)</label>
+        </div>
+      </div>
+
+      <div class="group">
+        <span class="legend">Exclure du résultat</span>
+        <div class="chips">
+          <label class="chip" class:on={exclude.documentaire}><input type="checkbox" bind:checked={exclude.documentaire} />Documentaires</label>
+          <label class="chip" class:on={exclude.telefilm}><input type="checkbox" bind:checked={exclude.telefilm} />Téléfilms</label>
+          <label class="chip" class:on={exclude.court}><input type="checkbox" bind:checked={exclude.court} />Courts métrages (&lt; 40 min)</label>
+          <label class="chip" class:on={exclude.spectacle}><input type="checkbox" bind:checked={exclude.spectacle} />Spectacles / concerts</label>
         </div>
       </div>
 

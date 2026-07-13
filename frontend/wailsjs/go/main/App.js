@@ -18,8 +18,8 @@ export function ExportCSV(arg1) {
   return window['go']['main']['App']['ExportCSV'](arg1);
 }
 
-export function Generate(arg1, arg2, arg3, arg4, arg5, arg6) {
-  return window['go']['main']['App']['Generate'](arg1, arg2, arg3, arg4, arg5, arg6);
+export function Generate(arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
+  return window['go']['main']['App']['Generate'](arg1, arg2, arg3, arg4, arg5, arg6, arg7);
 }
 
 export function GetPlatforms() {

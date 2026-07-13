@@ -16,7 +16,7 @@ import (
 )
 
 // Version courante de l'app. À incrémenter avant chaque tag de release.
-var Version = "1.0.2"
+var Version = "1.0.3"
 
 const repoSlug = "Gandalfleblanc/LiHDL-Search-Films-FR"
 

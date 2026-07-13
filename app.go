@@ -31,6 +31,18 @@ var providerMatch = map[string][]string{
 // PlatformList expose l'ordre d'affichage des plateformes au frontend.
 var PlatformList = []string{"Netflix", "Prime Video", "Orange", "Canal+"}
 
+// IDs TMDB utilisés pour les exclusions (vérifiés via l'API).
+const (
+	genreDocumentary = "99"
+	genreTVMovie     = "10770" // « TV Movie » = téléfilm
+	genreMusic       = "10402" // concerts / captations musicales
+	// Keywords « spectacle » : stand-up comedy, one-man show, one-woman show,
+	// concert film, concert, live concert, live performance, stand-up comedian.
+	keywordsShows = "9716,6656,193300,156205,6029,318730,11634,276162"
+	// En dessous de 40 min = court métrage (définition standard du long métrage).
+	minFeatureRuntime = "40"
+)
+
 // App struct
 type App struct {
 	ctx      context.Context
@@ -69,6 +81,7 @@ type Settings struct {
 	Monetize  []string `json:"monetize"`
 	Criteria  string   `json:"criteria"` // "origin" | "language" | "all"
 	Enrich    bool     `json:"enrich"`   // enrichissement JustWatch (résolution + VF)
+	Exclude   []string `json:"exclude"`  // documentaire | telefilm | court | spectacle
 }
 
 // ---------- Client TMDB ----------
@@ -129,7 +142,7 @@ func (a *App) progress(msg string) {
 
 // Generate interroge TMDB et renvoie la liste des films français disponibles
 // sur les plateformes choisies, selon les types de monétisation choisis.
-func (a *App) Generate(token string, useBearer bool, platforms []string, monetize []string, criteria string, enrich bool) GenerateResult {
+func (a *App) Generate(token string, useBearer bool, platforms []string, monetize []string, criteria string, enrich bool, exclude []string) GenerateResult {
 	if strings.TrimSpace(token) == "" {
 		return GenerateResult{Error: "Renseigne ta clé / ton jeton TMDB."}
 	}
@@ -182,6 +195,22 @@ func (a *App) Generate(token string, useBearer bool, platforms []string, monetiz
 	mon := strings.Join(monetize, "|")
 	films := map[int]*Film{}
 
+	// Exclusions demandées (documentaires / téléfilms / courts métrages / spectacles).
+	excl := map[string]bool{}
+	for _, e := range exclude {
+		excl[e] = true
+	}
+	var withoutGenres []string
+	if excl["documentaire"] {
+		withoutGenres = append(withoutGenres, genreDocumentary)
+	}
+	if excl["telefilm"] {
+		withoutGenres = append(withoutGenres, genreTVMovie)
+	}
+	if excl["spectacle"] {
+		withoutGenres = append(withoutGenres, genreMusic)
+	}
+
 	// 3. Parcours des pages discover par provider.
 	for _, p := range selected {
 		page, total := 1, 1
@@ -193,8 +222,16 @@ func (a *App) Generate(token string, useBearer bool, platforms []string, monetiz
 				"language":                      {"fr-FR"},
 				"sort_by":                       {"primary_release_date.desc"},
 				"include_adult":                 {"false"},
-				"without_genres":                {"99"}, // exclut les documentaires
 				"page":                          {strconv.Itoa(page)},
+			}
+			if len(withoutGenres) > 0 {
+				q.Set("without_genres", strings.Join(withoutGenres, ","))
+			}
+			if excl["spectacle"] {
+				q.Set("without_keywords", keywordsShows)
+			}
+			if excl["court"] {
+				q.Set("with_runtime.gte", minFeatureRuntime)
 			}
 			switch criteria {
 			case "language":
@@ -332,6 +369,7 @@ func (a *App) LoadSettings() Settings {
 		Monetize:  []string{"flatrate", "rent", "buy"},
 		Criteria:  "origin",
 		Enrich:    true,
+		Exclude:   []string{"documentaire", "telefilm", "court", "spectacle"},
 	}
 	p, err := settingsPath()
 	if err != nil {

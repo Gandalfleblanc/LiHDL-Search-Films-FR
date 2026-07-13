@@ -79,6 +79,7 @@ export namespace main {
 	    monetize: string[];
 	    criteria: string;
 	    enrich: boolean;
+	    exclude: string[];
 	
 	    static createFrom(source: any = {}) {
 	        return new Settings(source);
@@ -92,6 +93,7 @@ export namespace main {
 	        this.monetize = source["monetize"];
 	        this.criteria = source["criteria"];
 	        this.enrich = source["enrich"];
+	        this.exclude = source["exclude"];
 	    }
 	}
 	export class UpdateInfo {
